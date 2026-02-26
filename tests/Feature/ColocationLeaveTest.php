@@ -105,15 +105,14 @@ test('leave button is visible only for active non owner members', function () {
     $this->actingAs($owner)
         ->get(route('colocations.show', $colocation))
         ->assertOk()
-        ->assertDontSee('Leave Colocation');
+        ->assertDontSee('Quitter');
 
     $this->actingAs($activeMember)
         ->get(route('colocations.show', $colocation))
         ->assertOk()
-        ->assertSee('Leave Colocation');
+        ->assertSee('Quitter');
 
     $this->actingAs($inactiveMember)
         ->get(route('colocations.show', $colocation))
-        ->assertOk()
-        ->assertDontSee('Leave Colocation');
+        ->assertForbidden();
 });
