@@ -1,37 +1,48 @@
 <x-app-layout>
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            Create Colocation
-        </h2>
+        Nouvelle colocation
     </x-slot>
 
-    <div class="py-6">
-        <div class="max-w-2xl mx-auto sm:px-6 lg:px-8">
-            @if (session('error'))
-                <div class="mb-4 p-3 rounded bg-red-100 text-red-800">
-                    {{ session('error') }}
+    <div class="mx-auto max-w-3xl">
+        <div class="panel p-7">
+            <form method="POST" action="{{ route('colocations.store') }}" class="space-y-5">
+                @csrf
+
+                <div>
+                    <label for="name" class="mb-1 block text-sm font-semibold text-[#4f5d79]">Nom de la colocation</label>
+                    <input
+                        id="name"
+                        type="text"
+                        name="name"
+                        value="{{ old('name') }}"
+                        required
+                        class="input-ui"
+                        placeholder="ex: Residence Les Lilas"
+                    >
+                    <x-input-error :messages="$errors->get('name')" class="mt-2" />
                 </div>
-            @endif
 
-            <div class="bg-white p-6 rounded shadow">
-                <form method="POST" action="{{ route('colocations.store') }}">
-                    @csrf
+                <div>
+                    <label for="description" class="mb-1 block text-sm font-semibold text-[#4f5d79]">Description (optionnelle)</label>
+                    <textarea
+                        id="description"
+                        name="description"
+                        rows="4"
+                        class="input-ui"
+                        placeholder="Decrivez brievement votre colocation..."
+                    >{{ old('description') }}</textarea>
+                    <x-input-error :messages="$errors->get('description')" class="mt-2" />
+                </div>
 
-                    <div>
-                        <label class="block font-medium text-sm text-gray-700">Name</label>
-                        <input name="name" required class="mt-1 block w-full rounded border-gray-300" />
-                        @error('name')
-                            <p class="text-sm text-red-600 mt-1">{{ $message }}</p>
-                        @enderror
-                    </div>
-
-                    <div class="mt-4">
-                        <button class="px-4 py-2 bg-black text-white rounded">
-                            Create
-                        </button>
-                    </div>
-                </form>
-            </div>
+                <div class="flex items-center gap-3 pt-2">
+                    <button type="submit" class="btn-primary">
+                        Creer la colocation
+                    </button>
+                    <a href="{{ route('colocations.index') }}" class="text-sm font-semibold text-[#7e8aa2] hover:text-[#4f47e5]">
+                        Annuler
+                    </a>
+                </div>
+            </form>
         </div>
     </div>
 </x-app-layout>
