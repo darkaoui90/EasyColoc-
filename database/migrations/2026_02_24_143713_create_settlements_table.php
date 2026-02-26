@@ -13,7 +13,6 @@ return new class extends Migration
     {
         Schema::create('settlements', function (Blueprint $table) {
             $table->id();
-            $table->timestamps();
             $table->foreignId('colocation_id')->constrained('colocations')->cascadeOnDelete();
 
             $table->foreignId('from_user_id')->constrained('users')->cascadeOnDelete();
