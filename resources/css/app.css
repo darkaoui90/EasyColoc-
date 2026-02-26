@@ -1,3 +1,120 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+    :root {
+        --bg: #f1f4f9;
+        --surface: #ffffff;
+        --surface-soft: #f7f9fc;
+        --line: #e7ecf4;
+        --text: #1c2333;
+        --muted: #6e7a93;
+        --brand: #5048e5;
+        --brand-soft: #eef0ff;
+        --danger: #ef466f;
+        --success: #13b77a;
+        --card-dark-a: #111d3f;
+        --card-dark-b: #0c1530;
+    }
+
+    html,
+    body {
+        @apply h-full;
+    }
+
+    body {
+        color: var(--text);
+        background: radial-gradient(circle at 80% -20%, #ffffff 0%, var(--bg) 55%);
+    }
+}
+
+@layer components {
+    .app-shell {
+        @apply min-h-screen md:grid md:grid-cols-[260px_1fr];
+    }
+
+    .app-sidebar {
+        @apply border-r bg-white/95 md:sticky md:top-0 md:h-screen;
+        border-color: var(--line);
+    }
+
+    .app-main {
+        @apply min-h-screen;
+    }
+
+    .panel {
+        @apply rounded-2xl border bg-white;
+        border-color: var(--line);
+    }
+
+    .panel-soft {
+        @apply rounded-2xl border;
+        border-color: var(--line);
+        background: var(--surface-soft);
+    }
+
+    .panel-dark {
+        @apply rounded-2xl border text-white;
+        border-color: rgba(255, 255, 255, 0.08);
+        background: linear-gradient(135deg, var(--card-dark-a), var(--card-dark-b));
+    }
+
+    .btn-primary {
+        @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition;
+        background: var(--brand);
+    }
+
+    .btn-primary:hover {
+        filter: brightness(1.03);
+    }
+
+    .btn-danger {
+        @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition;
+        color: #d91a4d;
+        background: #ffeef3;
+    }
+
+    .btn-secondary {
+        @apply inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition;
+        border-color: var(--line);
+        color: #1f2a42;
+        background: #fff;
+    }
+
+    .badge-online {
+        @apply text-[10px] font-bold uppercase tracking-[0.16em];
+        color: var(--success);
+    }
+
+    .left-nav-link {
+        @apply flex items-center gap-3 rounded-xl px-4 py-3 text-[15px] font-semibold transition;
+        color: #607089;
+    }
+
+    .left-nav-link:hover {
+        background: #f3f6fc;
+        color: #3a4963;
+    }
+
+    .left-nav-link.active {
+        color: var(--brand);
+        background: var(--brand-soft);
+    }
+
+    .input-ui {
+        @apply w-full rounded-xl border px-4 py-2.5 text-sm focus:border-transparent focus:outline-none focus:ring-2;
+        border-color: var(--line);
+        background: #fff;
+        --tw-ring-color: rgba(80, 72, 229, 0.25);
+    }
+
+    .table-ui th {
+        @apply px-4 py-3 text-left text-xs font-bold uppercase tracking-wide;
+        color: #92a0b6;
+    }
+
+    .table-ui td {
+        @apply px-4 py-3 text-sm;
+    }
+}
