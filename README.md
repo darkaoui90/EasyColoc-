@@ -1,4 +1,4 @@
-# EasyColoc
+﻿# EasyColoc
 
 EasyColoc is a Laravel web application to manage shared housing expenses.
 
@@ -185,4 +185,5 @@ Potential next steps:
 ## License
 
 This project is currently distributed for educational use.
+
 
