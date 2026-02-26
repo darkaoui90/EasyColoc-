@@ -4,94 +4,237 @@ namespace App\Http\Controllers;
 
 use App\Models\Colocation;
 use App\Models\User;
+use App\Services\ColocationBalanceService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Illuminate\View\View;
 
 class ColocationController extends Controller
 {
-    public function create()
+    public function __construct(
+        private readonly ColocationBalanceService $balanceService
+    ) {
+    }
+
+    public function index(Request $request): View
     {
-        // Block if user has active coloc membership
-        if ($this->userHasActiveColocation()) {
-            return redirect()->route('dashboard')
+        $user = $request->user();
+
+        $colocations = $user->colocations()
+            ->wherePivotNull('left_at')
+            ->where('status', 'active')
+            ->orderByDesc('colocations.created_at')
+            ->get();
+
+        return view('colocations.index', [
+            'colocations' => $colocations,
+        ]);
+    }
+
+    public function create(Request $request): RedirectResponse|View
+    {
+        if ($request->user()->hasActiveColocation()) {
+            return redirect()
+                ->route('colocations.index')
                 ->with('error', 'You already have an active colocation.');
         }
 
         return view('colocations.create');
     }
 
-    public function store(Request $request)
+    public function store(Request $request): RedirectResponse
     {
-        
-        if ($this->userHasActiveColocation()) {
-            return redirect()->route('dashboard')
+        if ($request->user()->hasActiveColocation()) {
+            return redirect()
+                ->route('colocations.index')
                 ->with('error', 'You already have an active colocation.');
         }
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:1000'],
         ]);
 
         $user = $request->user();
 
-        $colocation = Colocation::create([
-            'name' => $validated['name'],
-            'owner_id' => $user->id,
-            'status' => 'active',
-        ]);
+        $colocation = DB::transaction(function () use ($validated, $user): Colocation {
+            $colocation = Colocation::create([
+                'name' => $validated['name'],
+                'description' => $validated['description'] ?? null,
+                'owner_id' => $user->id,
+                'status' => 'active',
+            ]);
 
-      
-        $colocation->members()->attach($user->id, [
-            'role' => 'owner',
-            'joined_at' => now(),
-        ]);
+            $colocation->members()->attach($user->id, [
+                'role' => 'owner',
+                'joined_at' => now(),
+                'left_at' => null,
+            ]);
 
-        return redirect()->route('colocations.show', $colocation)
-            ->with('success', 'Colocation created successfully!');
+            return $colocation;
+        });
+
+        return redirect()
+            ->route('colocations.show', $colocation)
+            ->with('success', 'Colocation created successfully.');
     }
 
-    public function show(Colocation $colocation)
+    public function show(Request $request, Colocation $colocation): View
     {
-        // Show only active members in the members list.
-        $colocation->load([
-            'members' => fn ($query) => $query->wherePivotNull('left_at'),
-        ]);
+        $authUser = $request->user();
+        $membership = $this->activeMembership($colocation, $authUser->id);
 
-        $activeMembership = $colocation->members
-            ->firstWhere('id', auth()->id());
+        abort_if($membership === null, 403, 'You are not an active member of this colocation.');
 
-        $canLeave = $activeMembership !== null
-            && $activeMembership->pivot->role !== 'owner';
+        $selectedMonth = $request->query('month', 'all');
 
-        return view('colocations.show', compact('colocation', 'canLeave'));
-    }
+        if ($selectedMonth !== 'all') {
+            $request->validate([
+                'month' => ['required', 'date_format:Y-m'],
+            ]);
+        }
 
-    public function leave(Request $request, Colocation $colocation)
-    {
-        $user = $request->user();
-
-        $membership = $colocation->members()
-            ->where('users.id', $user->id)
+        $activeMembers = $colocation->members()
             ->wherePivotNull('left_at')
-            ->first();
+            ->select('users.id', 'users.name', 'users.reputation')
+            ->orderBy('users.name')
+            ->get();
+
+        $colocation->setRelation('members', $activeMembers);
+
+        $categories = $colocation->categories()
+            ->orderBy('name')
+            ->get();
+
+        $expensesQuery = $colocation->expenses()
+            ->with([
+                'payer:id,name',
+                'category:id,name',
+            ])
+            ->orderByDesc('date')
+            ->orderByDesc('id');
+
+        if ($selectedMonth !== 'all') {
+            [$year, $month] = explode('-', $selectedMonth);
+            $expensesQuery
+                ->whereYear('date', (int) $year)
+                ->whereMonth('date', (int) $month);
+        }
+
+        $expenses = $expensesQuery->get();
+
+        $months = $colocation->expenses()
+            ->orderByDesc('date')
+            ->get(['date'])
+            ->map(function ($expense): array {
+                return [
+                    'month_key' => $expense->date->format('Y-m'),
+                    'month_label' => $expense->date->format('m/Y'),
+                ];
+            })
+            ->unique('month_key')
+            ->values();
+
+        $balanceData = $this->balanceService->compute($colocation);
+        $balances = $balanceData['balances'];
+
+        $membersById = $activeMembers->keyBy('id');
+
+        $settlements = collect($balanceData['settlements'])
+            ->map(function (array $item) use ($membersById): array {
+                return [
+                    'from_user_id' => $item['from_user_id'],
+                    'from_user_name' => $membersById[$item['from_user_id']]->name ?? 'Unknown',
+                    'to_user_id' => $item['to_user_id'],
+                    'to_user_name' => $membersById[$item['to_user_id']]->name ?? 'Unknown',
+                    'amount' => $item['amount'],
+                ];
+            });
+
+        $isOwner = $membership->pivot->role === 'owner';
+        $canLeave = !$isOwner;
+
+        return view('colocations.show', [
+            'colocation' => $colocation,
+            'expenses' => $expenses,
+            'categories' => $categories,
+            'months' => $months,
+            'selectedMonth' => $selectedMonth,
+            'settlements' => $settlements,
+            'balances' => $balances,
+            'isOwner' => $isOwner,
+            'canLeave' => $canLeave,
+        ]);
+    }
+
+    public function leave(Request $request, Colocation $colocation): RedirectResponse
+    {
+        $user = $request->user();
+        $membership = $this->activeMembership($colocation, $user->id);
 
         abort_if($membership === null, 403, 'Only active members can leave this colocation.');
         abort_if($membership->pivot->role === 'owner', 403, 'Owner cannot leave the colocation.');
 
-        $colocation->members()->updateExistingPivot($user->id, [
-            'left_at' => now(),
-        ]);
+        $balanceData = $this->balanceService->compute($colocation);
+        $balance = (float) ($balanceData['balances'][$user->id] ?? 0.0);
 
-        return redirect()->route('dashboard')
+        DB::transaction(function () use ($colocation, $user, $balance): void {
+            $colocation->members()->updateExistingPivot($user->id, [
+                'left_at' => now(),
+            ]);
+
+            $user->increment('reputation', $balance < -0.009 ? -1 : 1);
+        });
+
+        return redirect()
+            ->route('dashboard')
             ->with('success', 'You left the colocation successfully.');
     }
 
-    private function userHasActiveColocation(): bool
+    public function cancel(Request $request, Colocation $colocation): RedirectResponse
     {
-        $user = auth()->user();
+        $user = $request->user();
+        $membership = $this->activeMembership($colocation, $user->id);
 
-        return $user->colocations()
+        abort_if($membership === null, 403, 'Only active members can cancel this colocation.');
+        abort_if($membership->pivot->role !== 'owner', 403, 'Only the owner can cancel this colocation.');
+
+        $balanceData = $this->balanceService->compute($colocation);
+        $balances = $balanceData['balances'];
+
+        DB::transaction(function () use ($colocation, $balances): void {
+            $colocation->update([
+                'status' => 'cancelled',
+            ]);
+
+            $activeMembers = $colocation->members()
+                ->wherePivotNull('left_at')
+                ->get(['users.id']);
+
+            foreach ($activeMembers as $member) {
+                $balance = (float) ($balances[$member->id] ?? 0.0);
+
+                User::whereKey($member->id)
+                    ->increment('reputation', $balance < -0.009 ? -1 : 1);
+
+                $colocation->members()->updateExistingPivot($member->id, [
+                    'left_at' => now(),
+                ]);
+            }
+        });
+
+        return redirect()
+            ->route('colocations.index')
+            ->with('success', 'Colocation cancelled successfully.');
+    }
+
+    private function activeMembership(Colocation $colocation, int $userId): ?User
+    {
+        return $colocation->members()
+            ->where('users.id', $userId)
             ->wherePivotNull('left_at')
-            ->where('status', 'active')
-            ->exists();
+            ->first();
     }
 }
