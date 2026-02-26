@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Model;
 
 class Expense extends Model
@@ -20,17 +21,17 @@ class Expense extends Model
         'amount' => 'decimal:2',
     ];
 
-    public function payer()
+    public function payer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'payer_id');
     }
 
-    public function colocation()
+    public function colocation(): BelongsTo
     {
         return $this->belongsTo(Colocation::class);
     }
 
-    public function category()
+    public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
     }

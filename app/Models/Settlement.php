@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Model;
 
 class Settlement extends Model
@@ -19,17 +20,17 @@ class Settlement extends Model
         'amount' => 'decimal:2',
     ];
 
-    public function colocation()
+    public function colocation(): BelongsTo
     {
         return $this->belongsTo(Colocation::class);
     }
 
-    public function fromUser()
+    public function fromUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'from_user_id');
     }
 
-    public function toUser()
+    public function toUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'to_user_id');
     }
