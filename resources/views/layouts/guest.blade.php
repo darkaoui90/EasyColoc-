@@ -5,25 +5,26 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title>{{ config('app.name', 'Laravel') }}</title>
+        <title>{{ config('app.name', 'EasyColoc') }}</title>
 
-        <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">
-        <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
+        <link href="https://fonts.bunny.net/css?family=manrope:400,500,600,700,800&display=swap" rel="stylesheet" />
 
-        <!-- Scripts -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
-    <body class="font-sans text-gray-900 antialiased">
-        <div class="min-h-screen flex flex-col sm:justify-center items-center pt-6 sm:pt-0 bg-gray-100">
-            <div>
-                <a href="/">
-                    <x-application-logo class="w-20 h-20 fill-current text-gray-500" />
-                </a>
-            </div>
+    <body class="antialiased">
+        <div class="flex min-h-screen items-center justify-center bg-[#f1f4f9] px-4">
+            <div class="w-full max-w-md">
+                <div class="mb-5 text-center">
+                    <a href="/" class="inline-flex items-center gap-2 text-5xl font-extrabold leading-none text-[#4f47e5]">
+                        <span class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[#eef0ff] text-sm">EC</span>
+                        <span>EasyColoc</span>
+                    </a>
+                </div>
 
-            <div class="w-full sm:max-w-md mt-6 px-6 py-4 bg-white shadow-md overflow-hidden sm:rounded-lg">
-                {{ $slot }}
+                <div class="panel p-6 md:p-8">
+                    {{ $slot }}
+                </div>
             </div>
         </div>
     </body>
