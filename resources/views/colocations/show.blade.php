@@ -209,9 +209,25 @@
                                             <p class="text-[11px] uppercase text-[#f3ba4a]">{{ $member->pivot->role }}</p>
                                         </div>
                                     </div>
-                                    <span class="text-sm font-semibold {{ (($balances[$member->id] ?? 0) < 0) ? 'text-[#ff9bb5]' : 'text-[#36dfa0]' }}">
-                                        {{ number_format((float) ($balances[$member->id] ?? 0), 2, ',', ' ') }}
-                                    </span>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-sm font-semibold {{ (($balances[$member->id] ?? 0) < 0) ? 'text-[#ff9bb5]' : 'text-[#36dfa0]' }}">
+                                            {{ number_format((float) ($balances[$member->id] ?? 0), 2, ',', ' ') }}
+                                        </span>
+
+                                        @if ($isOwner && $member->pivot->role !== 'owner' && $member->id !== auth()->id())
+                                            <form method="POST" action="{{ route('colocations.members.remove', [$colocation, $member]) }}">
+                                                @csrf
+                                                <button
+                                                    type="submit"
+                                                    class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#ff5a7d]/25 text-[10px] font-bold text-[#ff7b99] hover:bg-[#ff5a7d]/35"
+                                                    title="Remove member"
+                                                    onclick="return confirm('Remove this member from the colocation?')"
+                                                >
+                                                    x
+                                                </button>
+                                            </form>
+                                        @endif
+                                    </div>
                                 </div>
                             </li>
                         @endforeach

@@ -3,12 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\Colocation;
+use App\Models\Settlement;
 use App\Models\User;
 use App\Services\ColocationBalanceService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class ColocationController extends Controller
@@ -228,6 +228,57 @@ class ColocationController extends Controller
         return redirect()
             ->route('colocations.index')
             ->with('success', 'Colocation cancelled successfully.');
+    }
+
+    public function removeMember(Request $request, Colocation $colocation, User $member): RedirectResponse
+    {
+        $owner = $request->user();
+
+        $ownerMembership = $this->activeMembership($colocation, $owner->id);
+        abort_if($ownerMembership === null, 403, 'Only active members can remove users.');
+        abort_if($ownerMembership->pivot->role !== 'owner', 403, 'Only owner can remove members.');
+
+        $targetMembership = $this->activeMembership($colocation, $member->id);
+        abort_if($targetMembership === null, 404, 'Target member is not active in this colocation.');
+        abort_if($targetMembership->pivot->role === 'owner', 422, 'Owner cannot be removed.');
+
+        $balanceData = $this->balanceService->compute($colocation);
+        $memberBalance = (float) ($balanceData['balances'][$member->id] ?? 0.0);
+
+        $transfers = collect($balanceData['settlements'])
+            ->filter(function (array $settlement) use ($member, $owner): bool {
+                return (int) $settlement['from_user_id'] === $member->id
+                    && (int) $settlement['to_user_id'] !== $owner->id
+                    && (float) $settlement['amount'] > 0.009;
+            })
+            ->values();
+
+        DB::transaction(function () use ($colocation, $member, $owner, $memberBalance, $transfers): void {
+            // When removed member has debt, transfer that debt to owner.
+            foreach ($transfers as $settlement) {
+                Settlement::create([
+                    'colocation_id' => $colocation->id,
+                    'from_user_id' => (int) $settlement['to_user_id'],
+                    'to_user_id' => $owner->id,
+                    'amount' => round((float) $settlement['amount'], 2),
+                    'paid_at' => now(),
+                ]);
+            }
+
+            $colocation->members()->updateExistingPivot($member->id, [
+                'left_at' => now(),
+            ]);
+
+            $member->increment('reputation', $memberBalance < -0.009 ? -1 : 1);
+        });
+
+        $message = $transfers->isNotEmpty()
+            ? 'Member removed. Outstanding debt was transferred to owner.'
+            : 'Member removed successfully.';
+
+        return redirect()
+            ->route('colocations.show', $colocation)
+            ->with('success', $message);
     }
 
     private function activeMembership(Colocation $colocation, int $userId): ?User
