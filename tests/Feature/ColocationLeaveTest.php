@@ -63,7 +63,8 @@ test('owner cannot leave a colocation', function () {
     $response = $this->actingAs($owner)
         ->post(route('colocations.leave', $colocation));
 
-    $response->assertForbidden();
+    $response->assertRedirect(route('colocations.show', $colocation));
+    $response->assertSessionHas('error', 'Owner cannot leave without another active member to transfer ownership.');
 
     $this->assertDatabaseHas('colocation_user', [
         'colocation_id' => $colocation->id,
@@ -105,7 +106,7 @@ test('leave button is visible only for active non owner members', function () {
     $this->actingAs($owner)
         ->get(route('colocations.show', $colocation))
         ->assertOk()
-        ->assertDontSee('Quitter');
+        ->assertSee('Quitter');
 
     $this->actingAs($activeMember)
         ->get(route('colocations.show', $colocation))
@@ -115,4 +116,74 @@ test('leave button is visible only for active non owner members', function () {
     $this->actingAs($inactiveMember)
         ->get(route('colocations.show', $colocation))
         ->assertForbidden();
+});
+
+test('owner cannot leave when owner has debt', function () {
+    $owner = User::factory()->create();
+    $member = User::factory()->create();
+    $colocation = createColocationWithOwner($owner);
+
+    $colocation->members()->attach($member->id, [
+        'role' => 'member',
+        'joined_at' => now(),
+        'left_at' => null,
+    ]);
+
+    \App\Models\Expense::create([
+        'title' => 'Shared purchase',
+        'amount' => 60,
+        'date' => now()->toDateString(),
+        'payer_id' => $member->id,
+        'colocation_id' => $colocation->id,
+        'category_id' => null,
+    ]);
+
+    $response = $this->actingAs($owner)
+        ->post(route('colocations.leave', $colocation));
+
+    $response->assertRedirect(route('colocations.show', $colocation));
+    $response->assertSessionHas('error', 'Owner cannot leave until all debt is paid.');
+
+    $this->assertDatabaseHas('colocation_user', [
+        'colocation_id' => $colocation->id,
+        'user_id' => $owner->id,
+        'left_at' => null,
+    ]);
+});
+
+test('owner can leave without debt and ownership is transferred', function () {
+    $owner = User::factory()->create();
+    $member = User::factory()->create();
+    $colocation = createColocationWithOwner($owner);
+
+    $colocation->members()->attach($member->id, [
+        'role' => 'member',
+        'joined_at' => now(),
+        'left_at' => null,
+    ]);
+
+    $response = $this->actingAs($owner)
+        ->post(route('colocations.leave', $colocation));
+
+    $response->assertRedirect(route('dashboard'));
+
+    $ownerPivot = DB::table('colocation_user')
+        ->where('colocation_id', $colocation->id)
+        ->where('user_id', $owner->id)
+        ->first();
+
+    expect($ownerPivot)->not->toBeNull();
+    expect($ownerPivot->left_at)->not->toBeNull();
+
+    $this->assertDatabaseHas('colocation_user', [
+        'colocation_id' => $colocation->id,
+        'user_id' => $member->id,
+        'role' => 'owner',
+        'left_at' => null,
+    ]);
+
+    $this->assertDatabaseHas('colocations', [
+        'id' => $colocation->id,
+        'owner_id' => $member->id,
+    ]);
 });

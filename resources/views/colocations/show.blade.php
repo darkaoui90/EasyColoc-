@@ -26,13 +26,19 @@
                             Annuler la colocation
                         </button>
                     </form>
-                @elseif ($canLeave)
+                @endif
+
+                @if ($canLeave)
                     <form method="POST" action="{{ route('colocations.leave', $colocation) }}">
                         @csrf
                         <button type="submit" class="btn-danger" onclick="return confirm('Quitter cette colocation ?')">
                             Quitter
                         </button>
                     </form>
+                @elseif ($isOwner)
+                    <button type="button" class="btn-danger opacity-50 cursor-not-allowed" disabled>
+                        Quitter
+                    </button>
                 @endif
 
                 <a href="{{ route('colocations.index') }}" class="btn-secondary">
@@ -40,6 +46,12 @@
                 </a>
             </div>
         </div>
+
+        @if ($isOwner && !$canLeave && !empty($ownerLeaveBlockedReason))
+            <div class="rounded-xl border border-[#ffe1e8] bg-[#fff3f7] px-4 py-3 text-sm text-[#c7335c]">
+                {{ $ownerLeaveBlockedReason }}
+            </div>
+        @endif
 
         <div class="grid gap-4 xl:grid-cols-[1fr_340px]">
             <div class="space-y-4">

@@ -154,7 +154,23 @@ class ColocationController extends Controller
             });
 
         $isOwner = $membership->pivot->role === 'owner';
-        $canLeave = !$isOwner;
+        $canLeave = true;
+        $ownerLeaveBlockedReason = null;
+
+        if ($isOwner) {
+            $ownerBalance = (float) ($balances[$authUser->id] ?? 0.0);
+            $hasReplacementMember = $activeMembers
+                ->where('id', '!=', $authUser->id)
+                ->isNotEmpty();
+
+            if ($ownerBalance < -0.009) {
+                $canLeave = false;
+                $ownerLeaveBlockedReason = 'Pay your debt before leaving the colocation.';
+            } elseif (!$hasReplacementMember) {
+                $canLeave = false;
+                $ownerLeaveBlockedReason = 'Add at least one active member before leaving the colocation.';
+            }
+        }
 
         return view('colocations.show', [
             'colocation' => $colocation,
@@ -166,6 +182,7 @@ class ColocationController extends Controller
             'balances' => $balances,
             'isOwner' => $isOwner,
             'canLeave' => $canLeave,
+            'ownerLeaveBlockedReason' => $ownerLeaveBlockedReason,
         ]);
     }
 
@@ -175,10 +192,48 @@ class ColocationController extends Controller
         $membership = $this->activeMembership($colocation, $user->id);
 
         abort_if($membership === null, 403, 'Only active members can leave this colocation.');
-        abort_if($membership->pivot->role === 'owner', 403, 'Owner cannot leave the colocation.');
-
         $balanceData = $this->balanceService->compute($colocation);
         $balance = (float) ($balanceData['balances'][$user->id] ?? 0.0);
+
+        if ($membership->pivot->role === 'owner') {
+            if ($balance < -0.009) {
+                return redirect()
+                    ->route('colocations.show', $colocation)
+                    ->with('error', 'Owner cannot leave until all debt is paid.');
+            }
+
+            $newOwner = $colocation->members()
+                ->wherePivotNull('left_at')
+                ->where('users.id', '!=', $user->id)
+                ->orderBy('users.name')
+                ->first();
+
+            if ($newOwner === null) {
+                return redirect()
+                    ->route('colocations.show', $colocation)
+                    ->with('error', 'Owner cannot leave without another active member to transfer ownership.');
+            }
+
+            DB::transaction(function () use ($colocation, $user, $newOwner): void {
+                $colocation->update([
+                    'owner_id' => $newOwner->id,
+                ]);
+
+                $colocation->members()->updateExistingPivot($newOwner->id, [
+                    'role' => 'owner',
+                ]);
+
+                $colocation->members()->updateExistingPivot($user->id, [
+                    'left_at' => now(),
+                ]);
+
+                $user->increment('reputation', 1);
+            });
+
+            return redirect()
+                ->route('dashboard')
+                ->with('success', "You left the colocation successfully. Ownership transferred to {$newOwner->name}.");
+        }
 
         DB::transaction(function () use ($colocation, $user, $balance): void {
             $colocation->members()->updateExistingPivot($user->id, [
